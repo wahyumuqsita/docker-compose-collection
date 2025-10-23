@@ -1,0 +1,83 @@
+services:
+  # --- REDIS NODES ---
+  redis-master:
+    image: redis:7-alpine
+    container_name: redis-master
+    command: redis-server --requirepass mypassword
+    ports:
+      - "6379:6379" # Expose master port to host
+    networks:
+      - redis-net
+
+  redis-replica-1:
+    image: redis:7-alpine
+    container_name: redis-replica-1
+    # This command tells it to be a replica of 'redis-master'
+    # It also sets its own password
+    command: redis-server --replicaof redis-master 6379 --masterauth mypassword --requirepass mypassword
+    networks:
+      - redis-net
+    depends_on:
+      - redis-master
+
+  redis-replica-2:
+    image: redis:7-alpine
+    container_name: redis-replica-2
+    command: redis-server --replicaof redis-master 6379 --masterauth mypassword --requirepass mypassword
+    networks:
+      - redis-net
+    depends_on:
+      - redis-master
+
+  # --- SENTINEL MONITORS ---
+  sentinel-1:
+    image: redis:7-alpine
+    container_name: sentinel-1
+    # Mount the config file
+    volumes:
+      - ./config/sentinel.conf:/etc/redis/sentinel.conf
+    # Start redis-sentinel with the config
+    command: redis-sentinel /etc/redis/sentinel.conf
+    ports:
+      - "26379:26379" # Expose sentinel-1 port to host
+    networks:
+      - redis-net
+    depends_on:
+      - redis-master
+      - redis-replica-1
+      - redis-replica-2
+
+  sentinel-2:
+    image: redis:7-alpine
+    container_name: sentinel-2
+    volumes:
+      - ./config/sentinel.conf:/etc/redis/sentinel.conf
+    command: redis-sentinel /etc/redis/sentinel.conf
+    ports:
+      - "26380:26379" # Map container 26379 to host 26380
+    networks:
+      - redis-net
+    depends_on:
+      - redis-master
+      - redis-replica-1
+      - redis-replica-2
+
+  sentinel-3:
+    image: redis:7-alpine
+    container_name: sentinel-3
+    volumes:
+      - ./config/sentinel.conf:/etc/redis/sentinel.conf
+    command: redis-sentinel /etc/redis/sentinel.conf
+    ports:
+      - "26381:26379" # Map container 26379 to host 26381
+    networks:
+      - redis-net
+    depends_on:
+      - redis-master
+      - redis-replica-1
+      - redis-replica-2
+
+# Define the network for all containers to communicate
+networks:
+  redis-net:
+    driver: bridge
